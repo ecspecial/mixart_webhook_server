@@ -61,7 +61,7 @@ app.post('/service/webhook/lora/image', (req, res) => {
 
   // This event is for regular form fields
   bb.on('field', (fieldName, val) => {
-    // console.log(`📝 field: ${fieldName} = ${val}`);
+    console.log(`📝 field: ${fieldName} = ${val}`);
     if (fieldName === 'id_gen') {
       id_gen = val.trim();
     }
@@ -69,7 +69,7 @@ app.post('/service/webhook/lora/image', (req, res) => {
 
   // This event is for the actual file
   bb.on('file', (fieldName, fileStream, { filename, encoding, mimeType }) => {
-    // console.log(`📦 file field=[${fieldName}] filename=[${filename}]`);
+    console.log(`📦 file field=[${fieldName}] filename=[${filename}]`);
     fileReceived = true;
 
     // Derive extension
@@ -138,7 +138,7 @@ app.post('/service/webhook/lora/image', (req, res) => {
 
         // 3) final path => userId/<id_gen>.ext
         const finalFilePath = path.join(userFolder, `${id_gen}${fileExt}`);
-        // console.log(`📝 Renaming temp => ${finalFilePath}`);
+        console.log(`📝 Renaming temp => ${finalFilePath}`);
         fs.renameSync(tempFilePath, finalFilePath);
 
         // 4) Update doc
@@ -195,13 +195,13 @@ app.post('/service/webhook/gen/image', (req, res) => {
     let responded = false;
   
     bb.on('field', (fieldName, val) => {
-    //   console.log(`📝 field: ${fieldName} = ${val}`);
+      console.log(`📝 field: ${fieldName} = ${val}`);
       fields[fieldName] = val;
       if (fieldName === 'id_gen') id_gen = val.trim();
     });
   
     bb.on('file', (fieldName, fileStream, { filename }) => {
-    //   console.log(`📦 file field=[${fieldName}] filename=[${filename}]`);
+      console.log(`📦 file field=[${fieldName}] filename=[${filename}]`);
       fileExt = path.extname(filename) || '.png';
       const tempName = `${id_gen}-${Date.now()}${fileExt}`;
       tempFilePath = path.join(uploadDir, tempName);
