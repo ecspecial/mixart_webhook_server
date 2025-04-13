@@ -101,7 +101,7 @@ app.post('/service/webhook/lora/image', (req, res) => {
       console.warn('⚠️ Missing id_gen or no file');
       if (!responded) {
         responded = true;
-        return res.status(400).json({ error: 'Missing id_gen or file' });
+        return res.status(200).json({ error: 'Missing id_gen or file' });
       }
       return;
     }
@@ -115,7 +115,7 @@ app.post('/service/webhook/lora/image', (req, res) => {
           console.warn(`No doc found for _id=${id_gen}`);
           if (!responded) {
             responded = true;
-            return res.status(404).json({ error: 'Image doc not found' });
+            return res.status(200).json({ error: 'Image doc not found' });
           }
           return;
         }
@@ -124,7 +124,7 @@ app.post('/service/webhook/lora/image', (req, res) => {
           console.warn('No userId in doc');
           if (!responded) {
             responded = true;
-            return res.status(400).json({ error: 'No userId in doc' });
+            return res.status(200).json({ error: 'No userId in doc' });
           }
           return;
         }
@@ -163,7 +163,7 @@ app.post('/service/webhook/lora/image', (req, res) => {
         console.error('❌ Error finishing file update:', err);
         if (!responded) {
           responded = true;
-          return res.status(500).json({ error: err.message });
+          return res.status(200).json({ error: err.message });
         }
       }
     });
@@ -174,7 +174,7 @@ app.post('/service/webhook/lora/image', (req, res) => {
     console.error('❌ Busboy error:', err);
     if (!responded) {
       responded = true;
-      res.status(500).json({ error: err.message });
+      res.status(200).json({ error: err.message });
     }
   });
 
@@ -220,7 +220,7 @@ app.post('/service/webhook/gen/image', (req, res) => {
       if (!id_gen || !tempFilePath) {
         if (!responded) {
           responded = true;
-          return res.status(400).json({ error: 'Missing id_gen or file' });
+          return res.status(200).json({ error: 'Missing id_gen or file' });
         }
         return;
       }
@@ -265,7 +265,7 @@ app.post('/service/webhook/gen/image', (req, res) => {
           console.error('❌ Error in webhook /gen/image:', err);
           if (!responded) {
             responded = true;
-            return res.status(500).json({ error: err.message });
+            return res.status(200).json({ error: err.message });
           }
         }
       });
@@ -275,7 +275,7 @@ app.post('/service/webhook/gen/image', (req, res) => {
       console.error('❌ Busboy error:', err);
       if (!responded) {
         responded = true;
-        res.status(500).json({ error: err.message });
+        res.status(200).json({ error: err.message });
       }
     });
   
