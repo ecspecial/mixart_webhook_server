@@ -5,8 +5,12 @@ const busboy = require('busboy');         // <-- No "new" here, it's a function
 const fs = require('fs');
 const path = require('path');
 
+const FormData = require('form-data');
+const fetch = require('node-fetch');
+
 // Mongoose model
 const Image = require('./imageModel');
+const User = require('./userModel');
 
 // Pull env vars
 const { MONGODB_URI, USER_IMAGES_PATH, PORT } = process.env;
@@ -281,6 +285,122 @@ app.post('/service/webhook/gen/image', (req, res) => {
   
     req.pipe(bb);
 });
+
+app.post('/service/webhook/skin/default/image', (req, res) => {
+    console.log('➡️ Incoming POST /webhook/skin/default/image');
+  
+    const bb = busboy({ headers: req.headers });
+  
+    let id_gen = '';
+    let tempFilePath = '';
+    let fileExt = '.png';
+    let fileWriteStream;
+    let responded = false;
+  
+    bb.on('field', (fieldName, val) => {
+      if (fieldName === 'id_gen') id_gen = val.trim();
+    });
+  
+    bb.on('file', (fieldName, fileStream, { filename }) => {
+      fileExt = path.extname(filename) || '.png';
+      const tempName = `${id_gen}-${Date.now()}${fileExt}`;
+      tempFilePath = path.join(uploadDir, tempName);
+  
+      fileWriteStream = fs.createWriteStream(tempFilePath);
+      fileStream.pipe(fileWriteStream);
+      fileWriteStream.on('finish', () => console.log('✅ Temp file write complete'));
+      fileWriteStream.on('error', (err) => console.error('❌ Write error:', err));
+    });
+  
+    bb.on('finish', async () => {
+      if (!id_gen || !tempFilePath) {
+        return res.status(200).json({ error: 'Missing id_gen or file' });
+      }
+  
+      fileWriteStream.on('finish', async () => {
+        try {
+          const user = await User.findOne({ 'modelMap.id_gen': id_gen });
+          if (!user) throw new Error('User not found with that model');
+  
+          const model = user.modelMap.find((m) => m.id_gen === id_gen);
+          if (!model) throw new Error('Model not found');
+  
+          const userFolder = path.join(uploadDir, user._id.toString(), 'default');
+          if (!fs.existsSync(userFolder)) {
+            fs.mkdirSync(userFolder, { recursive: true });
+          }
+  
+          const finalPath = path.join(userFolder, `${id_gen}${fileExt}`);
+          fs.renameSync(tempFilePath, finalPath);
+          const relativePath = path.join(user._id.toString(), 'default', `${id_gen}${fileExt}`).replace(/\\/g, '/');
+  
+          model.model_image = relativePath;
+          await user.save();
+  
+          console.log(`✅ Model image saved: ${relativePath}`);
+          if (!responded) {
+            responded = true;
+            return res.status(200).json({ message: 'Model image saved', path: relativePath });
+          }
+        } catch (err) {
+          console.error('❌ Error in model image webhook:', err);
+          if (!responded) {
+            responded = true;
+            return res.status(200).json({ error: err.message });
+          }
+        }
+      });
+    });
+  
+    req.pipe(bb);
+});
+
+app.get('/internal/generate-model-images', async (req, res) => {
+    console.log('🚀 Triggering default image generation for ready models with missing model_image');
+  
+    try {
+      const users = await User.find({ 'modelMap.status': 'ready' });
+  
+      let triggered = 0;
+  
+      for (const user of users) {
+        for (const model of user.modelMap) {
+          if (model.status === 'ready' && !model.model_image) {
+            const form = new FormData();
+            form.append("api_key", '123321');
+            form.append("id_gen", model.id_gen);
+            form.append("type_gen", "txt2img");
+            form.append("type_user", user.subscription === 'Free' ? 'free' : 'vip');
+            form.append("webhook", 'https://mixart.ai/service/webhook/skin/default/image');
+            form.append("loras", `${model.name_lora}.safetensors:1`);
+            form.append("prompt", "head profile looking forward, clear background, face in day light.");
+            form.append("resolution", "1280x1280");
+  
+            try {
+              const response = await fetch('http://141.95.126.33:28030/image/gen', {
+                method: 'POST',
+                headers: { "api_key": '123321' },
+                body: form
+              });
+  
+              const text = await response.text();
+              console.log(`📡 Sent model ${model.id_gen}: ${response.status} — ${text}`);
+  
+              if (response.ok) triggered++;
+            } catch (err) {
+              console.error(`❌ Failed to trigger model ${model.id_gen}:`, err.message);
+            }
+          }
+        }
+      }
+  
+      res.status(200).json({ message: `✅ Triggered ${triggered} model images.` });
+    } catch (err) {
+      console.error('❌ Error scanning users:', err);
+      res.status(500).json({ error: err.message });
+    }
+});
+  
 
 
 const deleteStaleImages = async () => {
