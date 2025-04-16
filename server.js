@@ -355,7 +355,7 @@ app.post('/service/webhook/skin/default/image', (req, res) => {
     req.pipe(bb);
 });
 
-app.get('/internal/generate-model-images', async (req, res) => {
+app.get('/service/internal/generate-model-images', async (req, res) => {
     console.log('🚀 Triggering default image generation for ready models with missing model_image');
   
     try {
