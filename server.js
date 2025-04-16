@@ -5,9 +5,6 @@ const busboy = require('busboy');         // <-- No "new" here, it's a function
 const fs = require('fs');
 const path = require('path');
 
-const FormData = require('form-data');
-const fetch = require('node-fetch');
-
 // Mongoose model
 const Image = require('./imageModel');
 const User = require('./userModel');
@@ -355,7 +352,7 @@ app.post('/service/webhook/skin/default/image', (req, res) => {
     req.pipe(bb);
 });
 
-app.get('/service/internal/generate-model-images', async (req, res) => {
+app.get('/internal/generate-model-images', async (req, res) => {
     console.log('🚀 Triggering default image generation for ready models with missing model_image');
   
     try {
@@ -366,20 +363,23 @@ app.get('/service/internal/generate-model-images', async (req, res) => {
       for (const user of users) {
         for (const model of user.modelMap) {
           if (model.status === 'ready' && !model.model_image) {
-            const form = new FormData();
+            const form = new (require('form-data'))();
             form.append("api_key", '123321');
             form.append("id_gen", model.id_gen);
             form.append("type_gen", "txt2img");
             form.append("type_user", user.subscription === 'Free' ? 'free' : 'vip');
-            form.append("webhook", 'https://mixart.ai/service/webhook/skin/default/image');
+            form.append("webhook", 'https://allowed-api-cheapest-like.trycloudflare.com/service/webhook/skin/default/image');
             form.append("loras", `${model.name_lora}.safetensors:1`);
             form.append("prompt", "head profile looking forward, clear background, face in day light.");
             form.append("resolution", "1280x1280");
   
             try {
+              const fetch = require('node-fetch');
               const response = await fetch('http://141.95.126.33:28030/image/gen', {
                 method: 'POST',
-                headers: { "api_key": '123321' },
+                headers: {
+                  "api_key": '123321'
+                },
                 body: form
               });
   
