@@ -50,6 +50,28 @@ app.get('/', (req, res) => {
 app.post('/service/webhook/lora/image', (req, res) => {
   console.log('➡️ Incoming POST /webhook/lora/image');
 
+  if (!req.headers['content-type']?.includes('multipart/form-data')) {
+    console.warn('⚠️ Unsupported content-type for this route:', req.headers['content-type']);
+  
+    let bodyData = '';
+    req.on('data', chunk => {
+      bodyData += chunk;
+    });
+  
+    req.on('end', () => {
+      try {
+        const parsed = JSON.parse(bodyData);
+        console.warn('🛑 Received JSON payload instead:', parsed);
+      } catch {
+        console.warn('🛑 Received non-multipart payload (not valid JSON):', bodyData);
+      }
+  
+      return res.status(200).json({ error: 'Expected multipart/form-data, got something else.' });
+    });
+  
+    return;
+  }
+
   const bb = busboy({ headers: req.headers }); // call as function, not "new"
 
   let id_gen = '';
@@ -186,6 +208,28 @@ app.post('/service/webhook/lora/image', (req, res) => {
 app.post('/service/webhook/gen/image', (req, res) => {
     console.log('➡️ Incoming POST /webhook/gen/image');
   
+    if (!req.headers['content-type']?.includes('multipart/form-data')) {
+        console.warn('⚠️ Unsupported content-type for this route:', req.headers['content-type']);
+      
+        let bodyData = '';
+        req.on('data', chunk => {
+          bodyData += chunk;
+        });
+      
+        req.on('end', () => {
+          try {
+            const parsed = JSON.parse(bodyData);
+            console.warn('🛑 Received JSON payload instead:', parsed);
+          } catch {
+            console.warn('🛑 Received non-multipart payload (not valid JSON):', bodyData);
+          }
+      
+          return res.status(200).json({ error: 'Expected multipart/form-data, got something else.' });
+        });
+      
+        return;
+    }
+
     const bb = busboy({ headers: req.headers });
   
     let id_gen = '';
@@ -286,6 +330,28 @@ app.post('/service/webhook/gen/image', (req, res) => {
 app.post('/service/webhook/skin/default/image', (req, res) => {
     console.log('➡️ Incoming POST /webhook/skin/default/image');
   
+    if (!req.headers['content-type']?.includes('multipart/form-data')) {
+        console.warn('⚠️ Unsupported content-type for this route:', req.headers['content-type']);
+      
+        let bodyData = '';
+        req.on('data', chunk => {
+          bodyData += chunk;
+        });
+      
+        req.on('end', () => {
+          try {
+            const parsed = JSON.parse(bodyData);
+            console.warn('🛑 Received JSON payload instead:', parsed);
+          } catch {
+            console.warn('🛑 Received non-multipart payload (not valid JSON):', bodyData);
+          }
+      
+          return res.status(200).json({ error: 'Expected multipart/form-data, got something else.' });
+        });
+      
+        return;
+    }
+
     const bb = busboy({ headers: req.headers });
   
     let id_gen = '';
