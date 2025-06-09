@@ -4,10 +4,13 @@ const mongoose = require('mongoose');
 const busboy = require('busboy');         // <-- No "new" here, it's a function
 const fs = require('fs');
 const path = require('path');
+const fetch = require('node-fetch');
+
 
 // Mongoose model
 const Image = require('./imageModel');
 const User = require('./userModel');
+const Video = require('./videoModel');
 
 // Pull env vars
 const { MONGODB_URI, USER_IMAGES_PATH, PORT } = process.env;
@@ -28,6 +31,14 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
   console.log('Created upload directory:', uploadDir);
 }
+
+const VIDEO_OUTPUT_PATH = process.env.USER_VIDEOS_PATH || path.join(__dirname, 'user_videos');
+// Ensure directory exists
+if (!fs.existsSync(VIDEO_OUTPUT_PATH)) {
+  fs.mkdirSync(VIDEO_OUTPUT_PATH, { recursive: true });
+  console.log("📁 Created USER_VIDEOS_PATH:", VIDEO_OUTPUT_PATH);
+}
+
 
 const app = express();
 
@@ -467,6 +478,99 @@ app.get('/internal/generate-model-images', async (req, res) => {
     }
 });
   
+
+app.post('/service/webhook/gen/video', (req, res) => {
+  console.log('➡️  Incoming POST /webhook/gen/video');
+
+  if (!req.headers['content-type']?.includes('multipart/form-data')) {
+    console.warn('⚠️  Expected multipart/form-data, got:', req.headers['content-type']);
+    return res.status(200).json({ error: 'Wrong content-type' });
+  }
+
+  const bb       = busboy({ headers: req.headers });
+  const fields   = {};
+  let responded  = false;
+
+  /* ---------- collect fields only; no file stream arrives on this route ---- */
+  bb.on('field', (name, val) => {
+    fields[name] = val;
+    console.log(`📝 field: ${name} = ${val}`);
+  });
+
+  bb.on('finish', async () => {
+    try {
+      const { video: videoUrl, id_gen } = fields;
+
+      if (!videoUrl || !id_gen) {
+        throw new Error('Missing video URL or id_gen');
+      }
+
+      /* 1️⃣  find the Video doc to get userId */
+      const videoDoc = await Video.findById(id_gen);
+      if (!videoDoc) throw new Error(`Video doc not found for _id=${id_gen}`);
+
+      const userId = videoDoc.userId;
+      if (!userId)   throw new Error('Video doc is missing userId');
+
+      /* 2️⃣  determine final path (user folder + id_gen.mp4) */
+      const userFolder = path.join(VIDEO_OUTPUT_PATH, userId.toString());
+      if (!fs.existsSync(userFolder)) {
+        fs.mkdirSync(userFolder, { recursive: true });
+        console.log('📁 Created user video folder:', userFolder);
+      }
+
+      const finalVideoPath = path.join(userFolder, `${id_gen}.mp4`);
+      console.log(`⬇️  Downloading video → ${finalVideoPath}`);
+
+      /* 3️⃣  download & stream to disk */
+      const response = await fetch(videoUrl);
+      if (!response.ok) throw new Error(`Download failed: ${response.status} ${response.statusText}`);
+
+      await new Promise((resolve, reject) => {
+        const fileStream = fs.createWriteStream(finalVideoPath);
+        response.body.pipe(fileStream);
+        response.body.on('error', reject);
+        fileStream.on('finish', resolve);
+      });
+
+      /* 4️⃣  update the Video document */
+      const relativePath = path
+        .join(userId.toString(), `${id_gen}.mp4`)
+        .replace(/\\/g, '/');                       // Windows friendly
+
+      videoDoc.res_video = relativePath;
+      videoDoc.status    = 'ready';
+      await videoDoc.save();
+
+      console.log(`✅  Saved video & updated doc: ${relativePath}`);
+
+      if (!responded) {
+        responded = true;
+        return res.status(200).json({
+          message: 'Video saved',
+          id_gen,
+          path: relativePath,
+        });
+      }
+    } catch (err) {
+      console.error('❌  /webhook/gen/video error:', err.message);
+      if (!responded) {
+        responded = true;
+        return res.status(200).json({ error: err.message });
+      }
+    }
+  });
+
+  bb.on('error', (err) => {
+    console.error('❌  Busboy error (video route):', err);
+    if (!responded) {
+      responded = true;
+      res.status(200).json({ error: err.message });
+    }
+  });
+
+  req.pipe(bb);
+});
 
 
 const deleteStaleImages = async () => {
