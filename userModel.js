@@ -144,6 +144,7 @@ const UserSchema = new Schema({
         name: { type: String, required: true },
         id_gen: { type: String, required: true },
         name_lora: { type: String, required: true },
+        gender: { type: String, required: true },
         status: {
           type: String,
           enum: ["generating", "ready"],

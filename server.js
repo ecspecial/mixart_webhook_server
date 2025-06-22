@@ -1,11 +1,11 @@
 require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
-const busboy = require('busboy');         // <-- No "new" here, it's a function
+const busboy = require('busboy');
 const fs = require('fs');
 const path = require('path');
 const fetch = require('node-fetch');
-
+const { generateDefaultImageForModel } = require('./generateDefaultImageForLora');
 
 // Mongoose model
 const Image = require('./imageModel');
@@ -41,6 +41,8 @@ if (!fs.existsSync(VIDEO_OUTPUT_PATH)) {
 
 
 const app = express();
+
+app.use(express.json());
 
 app.get('/', (req, res) => {
   res.send('Hello from the streaming webhook server!');
@@ -474,7 +476,7 @@ app.get('/internal/generate-model-images', async (req, res) => {
       res.status(200).json({ message: `✅ Triggered ${triggered} model images.` });
     } catch (err) {
       console.error('❌ Error scanning users:', err);
-      res.status(500).json({ error: err.message });
+      res.status(200).json({ error: err.message });
     }
 });
   
@@ -570,6 +572,86 @@ app.post('/service/webhook/gen/video', (req, res) => {
   });
 
   req.pipe(bb);
+});
+
+
+// Handle the webhook logic
+app.post('/service/webhook/lora', async (req, res) => {
+    console.log('➡️  Incoming POST /webhook/lora');
+    const contentType = req.headers['content-type'] || "";
+
+    // Handle JSON payload
+    if (contentType.includes("application/json")) {
+        try {
+        const data = req.body;
+        const { message, id_gen } = data;
+
+        if (message?.includes("startTrainingLora")) {
+            console.log("🚀 LoRA training started:", message);
+        } else {
+            console.log("📨 JSON webhook message:", data);
+        }
+
+        return res.status(200).json({ received: true });
+        } catch (error) {
+        console.error("❌ Failed to parse JSON:", error);
+        return res.status(200).json({ error: "Invalid JSON" });
+        }
+    }
+
+    const bb = busboy({ headers: req.headers });
+    const fields = {};
+
+      const result = await new Promise((resolve, reject) => {
+        bb.on("field", (name, value) => {
+        fields[name] = value;
+        });
+
+        bb.on("finish", () => resolve(fields));
+        bb.on("error", (err) => reject(err));
+
+        req.pipe(bb);
+    });
+
+    const { id_gen } = result;
+
+    console.log("✅ Form-data webhook received:", result);
+
+    if (!id_gen) {
+        console.warn("⚠️ Form-data webhook missing id_gen");
+        return res.status(200).json({ warning: "Missing model ID" });
+    }
+
+    try {
+        const user = await User.findOne({ "modelMap.id_gen": id_gen });
+
+        if (!user) {
+        console.warn("⚠️ No user found with model ID:", id_gen);
+        } else {
+        const model = user.modelMap.find((m) => m.id_gen === id_gen);
+        if (model) model.status = "ready";
+        await user.save();
+        console.log("✅ User modelMap status updated to 'ready'");
+
+        try {
+            const defaultGenResult = await generateDefaultImageForModel({
+                id_gen: model.id_gen,
+                name_lora: model.name_lora,
+                gender: model.gender,
+            });
+
+            console.log("🎨 Default model image gen triggered:", defaultGenResult);
+        } catch (err) {
+            console.error("❌ Failed to generate default model image:", err);
+        }
+        }
+
+        return res.status(200).json({ received: true });
+    } catch (err) {
+        console.error("❌ Error updating modelMap:", err);
+        return res.status(200).json({ error: "Server error" });
+    }
+
 });
 
 
